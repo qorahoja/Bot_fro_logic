@@ -1,0 +1,3 @@
+Company_profit= Gross - Fuel - Tolls - Layover - Factoring Fee - Dispatch Fee - Accounting - Safety - Mobile Expenses - Truck Payment - IFTA permits - ELD for company - Truck payment per mile - PD INS - Driver Profit
+
+Driver_Profit = Loaded * Rate - Escrow - (Others)
