@@ -1,3 +1,10 @@
 Company_profit= Gross - Fuel - Tolls - Layover - Factoring Fee - Dispatch Fee - Accounting - Safety - Mobile Expenses - Truck Payment - IFTA permits - ELD for company - Truck payment per mile - PD INS - Driver Profit
 
 Driver_Profit = Loaded * Rate - Escrow - (Others)
+
+PM = Gross / All miles
+
+Factoring Fee = 1% from Gross
+
+Dispach Fee = 3% From Gross
+

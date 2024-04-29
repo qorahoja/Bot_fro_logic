@@ -106,46 +106,91 @@ def generate_job_id():
     job_id = uuid.uuid4().hex
     return job_id
 
-@dp.message_handler(lambda message: "Load" in message.text)
-async def receive_new_job(message: types.Message):
-    unit = message.text.split("Load:")[1].split(" ")[2].split('\n')[0]
-    driver_name = message.text.split("👤")[1].split(" ")[2].split("\n")[0]
-    dh = message.text.split("DH")[1].split(" ")[1].split("\n")[0]
-    customer_name = message.text.split("📦")[1].split(" ")[2]
-    thre = message.text.split("————————————————")[2].split("\n")[3].split("   ")[0]
-    four = message.text.split("————————————————")[2].split("\n")[4].split('   ')[0]
-    bosh = f"{thre} - {four}"
+# @dp.message_handler(lambda message: "Load" in message.text)
+# async def receive_new_job(message: types.Message):
+#     if '/new_order' in message.text:
+#         unit = message.text.split("Load:")[1].split(" ")[2].split('\n')[0]
+#         driver_name = message.text.split("👤")[1].split(" ")[2].split("\n")[0]
+#         dh = message.text.split("DH")[1].split(" ")[1].split("\n")[0]
+#         customer_name = message.text.split("📦")[1].split(" ")[2]
+#         thre = message.text.split("————————————————")[2].split("\n")[3].split("   ")[0]
+#         four = message.text.split("————————————————")[2].split("\n")[4].split('   ')[0]
+#         bosh = f"{thre} - {four}"
+        
+#         thre_del = message.text.split("————————————————")[3].split("\n")[3].split("   ")[0]
+#         four_del = message.text.split("————————————————")[3].split("\n")[4].split('   ')[0]
+#         oxr = f"{thre_del} {four_del}"
+#         lane = f"{bosh} - {oxr}"
+#         pu_data = message.text.split("PU:")[1].split("\n")[0]
+        
+#         manager = message.text.split("👨🏻‍💻: ")[1].split("\n")[0]
+
+#         rate = message.text.split("Rate: ")[1].split("\n")[0]
+
+#         miles = message.text.split("Miles: ")[1].split("\n")[0]
+
+#         gross = message.text.split("Gross: ")[1].split("\n")[0]
+
+        
+#         print(gross)
+#         # all_data = [customer_name, unit, driver_name, lane, pu_data, rate, dh, miles, manager]
+#         # Generate or retrieve the unique jobID
+#         jobID = generate_job_id()  # Assuming you have a function to generate a unique job ID
+
+#         # Insert data into the database
+#         db.insert_all(jobID, customer_name, unit, driver_name, lane, pu_data, rate, dh, miles, manager, "In Progress")
+
+#         # Call the catch_driver function with the appropriate parameters
+#         catch_driver(unit, driver_name, customer_name)
+
+
+
+
+@dp.message_handler(commands=['new_order'])
+async def mute_user_command(message: types.Message):
+    print("NewOreder")
+    # Check if the sender of the message is an admin
+    await message.delete()
     
-    thre_del = message.text.split("————————————————")[3].split("\n")[3].split("   ")[0]
-    four_del = message.text.split("————————————————")[3].split("\n")[4].split('   ')[0]
-    oxr = f"{thre_del} {four_del}"
-    lane = f"{bosh} - {oxr}"
-    pu_data = message.text.split("PU:")[1].split("\n")[0]
-    
-    manager = message.text.split("👨🏻‍💻: ")[1].split("\n")[0]
+    replied_to_message = message.reply_to_message
+    if replied_to_message and replied_to_message.text:
+                message_text = replied_to_message.text
 
-    rate = message.text.split("Rate: ")[1].split("\n")[0]
+            # Use regular expressions to extract information
+           
+                
+                unit = message_text.split("Load:")[1].split(" ")[2].split('\n')[0]
+                driver_name = message_text.split("👤")[1].split(" ")[2].split("\n")[0]
+                dh = message_text.split("DH")[1].split(" ")[1].split("\n")[0]
+                customer_name = message_text.split("📦")[1].split(" ")[2]
+                thre = message_text.split("————————————————")[2].split("\n")[3].split("   ")[0]
+                four = message_text.split("————————————————")[2].split("\n")[4].split('   ')[0]
+                bosh = f"{thre} - {four}"
+                
+                thre_del = message_text.split("————————————————")[3].split("\n")[3].split("   ")[0]
+                four_del = message_text.split("————————————————")[3].split("\n")[4].split('   ')[0]
+                oxr = f"{thre_del} {four_del}"
+                lane = f"{bosh} - {oxr}"
+                pu_data = message_text.split("PU:")[1].split("\n")[0]
+                
+                manager = message_text.split("👨🏻‍💻: ")[1].split("\n")[0]
 
-    miles = message.text.split("Miles: ")[1].split("\n")[0]
-   
+                rate = message_text.split("Rate: ")[1].split("\n")[0]
 
-    
+                miles = message_text.split("Miles: ")[1].split("\n")[0]
 
-    # all_data = [customer_name, unit, driver_name, lane, pu_data, rate, dh, miles, manager]
-    # Generate or retrieve the unique jobID
-    jobID = generate_job_id()  # Assuming you have a function to generate a unique job ID
+                gross = message_text.split("Gross: ")[1].split("\n")[0]
 
-    # Insert data into the database
-    db.insert_all(jobID, customer_name, unit, driver_name, lane, pu_data, rate, dh, miles, manager, "In Progress")
+                # Generate or retrieve the unique jobID
+                jobID = generate_job_id()  # Assuming you have a function to generate a unique job ID
 
-    # Call the catch_driver function with the appropriate parameters
-    catch_driver(unit, driver_name, customer_name)
+                # Insert data into the database
+                db.insert_all(jobID, customer_name, unit, driver_name, lane, pu_data, rate, dh, miles, manager, "In Progress")
 
+                # Call the catch_driver function with the appropriate parameters
+                catch_driver(unit, driver_name, customer_name)
 
-
-
-
-
+                await message.answer("Order added to Database!")
 
 
 
@@ -231,21 +276,57 @@ async def admin_handler(message: types.Message):
             await message.answer("Mr/Mrs please send this command like that /manager: your_key")
 
 
+@dp.message_handler(lambda message: message.text == "Drivers")
+async def drivers(message: types.Message):
+    all_drivers, total_count = db.catch_all_drivers()
+    
+    # Create an inline keyboard with buttons for each driver
+    keyboard = types.InlineKeyboardMarkup()
+    for driver_name in all_drivers:
+        keyboard.add(types.InlineKeyboardButton(text=driver_name, callback_data=f"driver_{driver_name}"))
+    
+    # Send the message with all driver names and the total count along with the inline keyboard
+    await message.answer(f"Total number of drivers: {total_count}", reply_markup=keyboard)
 
 @dp.message_handler(lambda message: message.text == "Drivers")
 async def drivers(message: types.Message):
     all_drivers, total_count = db.catch_all_drivers()
     
-    # Concatenate all driver names into one string
-    drivers_message = f"Drivers:\n{'-' * 30}\n" + "\n".join(driver[0] for driver in all_drivers)
+    # Create an inline keyboard with buttons for each driver
+    keyboard = types.InlineKeyboardMarkup()
+    for driver_name, _ in all_drivers:
+        keyboard.add(types.InlineKeyboardButton(text=driver_name, callback_data=f"driver_{driver_name}"))
     
-    # Send the message with all driver names and the total count
-    await message.answer(f"Total number of drivers: {total_count}\n{drivers_message}")
+    # Send the message with all driver names and the total count along with the inline keyboard
+    await message.answer(f"Total number of drivers: {total_count}", reply_markup=keyboard)
+
+
+
+@dp.message_handler(commands=['layover'])
+async def layover(message: types.Message):
+    await message.delete()
+    await message.answer("Layover added to Database!!!")
+    money = message.text.split(" ")[1]
+
+
+@dp.message_handler(commands=['detention'])
+async def detention(message: types.Message):
+    await message.delete()
+    await message.answer("Detention added to Database!!!")
+    money = message.text.split(" ")[1]
+
+
+#stopdan keyn qilinadigan ishla
 
 
 
 
 
+#Others
+
+
+
+#Rate
 
 
 
