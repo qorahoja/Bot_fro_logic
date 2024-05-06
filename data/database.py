@@ -29,6 +29,25 @@ def create_database(db_name):
                 status TEXT
                 )''')
     
+    cursor.execute('''CREATE TABLE IF NOT EXISTS mothly (
+    jobID TEXT,
+    Customer TEXT,
+    "LOAD ID" TEXT,
+    "DRIVER NAME" TEXT,
+    LANE TEXT,
+    "PU DATE" TEXT,
+    STATUS TEXT,
+    RATE TEXT,
+    DH TEXT,
+    MILES TEXT,
+    "BOOKED BY" TEXT,
+    NOTES TEXT,
+    "AMZ PAYMENT STATUS" TEXT,
+    Factoring TEXT,
+    "PAYMENT STATUS" TEXT
+)
+''')
+    
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS admin(
                    admin_name TEXT,

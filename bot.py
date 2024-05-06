@@ -29,50 +29,88 @@ dp.middleware.setup(LoggingMiddleware())
 db = UserDatabase("database.db")
 
 
+import pytesseract
+from PIL import Image
+
+
+def tesseract(image_name):
+    # Path to the image file
+    image_path = image_name
+
+    # Path to Tesseract executable
+    pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+    # Open the image using PIL (Python Imaging Library)
+    image = Image.open(image_path)
+
+    # Use pytesseract to do OCR on the image
+    text = pytesseract.image_to_string(image)
+
+    return text
+
 
 
 
 
 def fuel_data(file_name):
-    # Replace 'your_file.xlsx' with the path to your Excel file
-    file_path = file_name
-
-    # Read the Excel file
     try:
-        df = pd.read_excel(file_path)
+        # Read the Excel file
+        df = pd.read_excel(file_name)
         
-        # Filter rows where 'Unnamed: 15' column contains float values
-        amt_column = df['Unnamed: 15']  # Adjust the column index based on your actual file
-        float_values = amt_column.apply(lambda x: isinstance(x, float) or isinstance(x, int))
-        filtered_df = df[float_values]
+        # Filter rows where specific column contains float values
+        amt_column = df.iloc[:, 15]  # Assuming 'Unnamed: 15' is the 16th column
+        float_values = amt_column.apply(lambda x: isinstance(x, (float, int)))
+        filtered_df = df[float_values].copy()  # Create a copy to avoid the warning
         
-        # Remove quotation marks from 'Unnamed: 15' column using .loc[]
+        # Filter out rows where 'Unnamed: 4' column contains float values
+        filtered_df = filtered_df[~filtered_df['Unnamed: 4'].apply(lambda x: isinstance(x, (float, int)))]
+        
+        # Rename columns to 'Unnamed: 15' and 'Unnamed: 1'
+        filtered_df.columns = ['Unnamed: 15' if col == 'Column_15' else 'Unnamed: 1' if col == 'Column_1' else col for col in filtered_df.columns]
+        
+        # Remove quotation marks using .loc[]
         filtered_df.loc[:, 'Unnamed: 15'] = filtered_df['Unnamed: 15'].astype(str).str.replace('"', '')
         
-        # Convert 'Unnamed: 15' column to numeric and remove NaN values using .loc[]
+        # Convert 'Unnamed: 15' column to numeric using .loc[] to avoid the warning
         filtered_df.loc[:, 'Unnamed: 15'] = pd.to_numeric(filtered_df['Unnamed: 15'], errors='coerce')
+        
+        # Drop rows with NaN values in the 'Unnamed: 15' column
         filtered_df = filtered_df.dropna(subset=['Unnamed: 15'])
         
-        # Group by 'Unnamed: 1' (Driver Name) and sum 'Unnamed: 15' values
-        grouped_df = filtered_df.groupby('Unnamed: 1')['Unnamed: 15'].sum().reset_index()
-
-        # Initialize an empty list to store results
-        results = []
-
-        for index, row in grouped_df.iterrows():
-            driver_name = row['Unnamed: 1']
-            total_fuel = row['Unnamed: 15']
-            results.append((driver_name, total_fuel))
-
-        return results
+        # Group by 'Unnamed: 1' (Driver Name) and calculate the total fuel consumed and number of days worked
+        grouped_df = filtered_df.groupby('Unnamed: 1').agg({'Unnamed: 15': 'sum', 'Unnamed: 4': 'nunique'}).reset_index()
+        grouped_df.columns = ['Driver Name', 'Total Fuel', 'Days Worked']
+        
+        # Calculate remaining fuel for drivers who worked more than 7 days
+        grouped_df['Remaining Fuel'] = grouped_df.apply(lambda row: row['Total Fuel'] - 7 * row['Days Worked'] if row['Days Worked'] > 7 else 0, axis=1)
+        
+        # Create lists to store the results
+        driver_names = grouped_df['Driver Name'].tolist()
+        total_fuels = grouped_df['Total Fuel'].tolist()
+        days_worked_list = grouped_df['Days Worked'].tolist()
+        
+        return driver_names, total_fuels, days_worked_list
         
     except FileNotFoundError:
-        print(f"File '{file_path}' not found.")
+        print(f"File '{file_name}' not found.")
     except Exception as e:
         print(f"An error occurred: {e}")
 
 
 
+
+@dp.message_handler(content_types=types.ContentTypes.PHOTO)
+async def screenshot(message: types.Message):
+    photo = message.photo[-1]
+    # Download the photo by file ID
+    file_path = await photo.download()
+    file_path = str(file_path)
+    test_path = file_path.split("=")[1].replace("'", "").replace(">", "")
+    print(f"File Path:{test_path}")
+    text = tesseract(test_path)
+    
+
+    print(text)
 
 
 
@@ -105,45 +143,6 @@ def generate_job_id():
     # Generate a UUID (Universally Unique Identifier) for the job ID
     job_id = uuid.uuid4().hex
     return job_id
-
-# @dp.message_handler(lambda message: "Load" in message.text)
-# async def receive_new_job(message: types.Message):
-#     if '/new_order' in message.text:
-#         unit = message.text.split("Load:")[1].split(" ")[2].split('\n')[0]
-#         driver_name = message.text.split("👤")[1].split(" ")[2].split("\n")[0]
-#         dh = message.text.split("DH")[1].split(" ")[1].split("\n")[0]
-#         customer_name = message.text.split("📦")[1].split(" ")[2]
-#         thre = message.text.split("————————————————")[2].split("\n")[3].split("   ")[0]
-#         four = message.text.split("————————————————")[2].split("\n")[4].split('   ')[0]
-#         bosh = f"{thre} - {four}"
-        
-#         thre_del = message.text.split("————————————————")[3].split("\n")[3].split("   ")[0]
-#         four_del = message.text.split("————————————————")[3].split("\n")[4].split('   ')[0]
-#         oxr = f"{thre_del} {four_del}"
-#         lane = f"{bosh} - {oxr}"
-#         pu_data = message.text.split("PU:")[1].split("\n")[0]
-        
-#         manager = message.text.split("👨🏻‍💻: ")[1].split("\n")[0]
-
-#         rate = message.text.split("Rate: ")[1].split("\n")[0]
-
-#         miles = message.text.split("Miles: ")[1].split("\n")[0]
-
-#         gross = message.text.split("Gross: ")[1].split("\n")[0]
-
-        
-#         print(gross)
-#         # all_data = [customer_name, unit, driver_name, lane, pu_data, rate, dh, miles, manager]
-#         # Generate or retrieve the unique jobID
-#         jobID = generate_job_id()  # Assuming you have a function to generate a unique job ID
-
-#         # Insert data into the database
-#         db.insert_all(jobID, customer_name, unit, driver_name, lane, pu_data, rate, dh, miles, manager, "In Progress")
-
-#         # Call the catch_driver function with the appropriate parameters
-#         catch_driver(unit, driver_name, customer_name)
-
-
 
 
 @dp.message_handler(commands=['new_order'])
@@ -180,6 +179,9 @@ async def mute_user_command(message: types.Message):
                 miles = message_text.split("Miles: ")[1].split("\n")[0]
 
                 gross = message_text.split("Gross: ")[1].split("\n")[0]
+                
+                
+            
 
                 # Generate or retrieve the unique jobID
                 jobID = generate_job_id()  # Assuming you have a function to generate a unique job ID
@@ -187,8 +189,10 @@ async def mute_user_command(message: types.Message):
                 # Insert data into the database
                 db.insert_all(jobID, customer_name, unit, driver_name, lane, pu_data, rate, dh, miles, manager, "In Progress")
 
+                db.insert_all_to_monthly(jobID, customer_name, unit, driver_name, lane, pu_data, "In Progress", rate, dh, miles, manager)
                 # Call the catch_driver function with the appropriate parameters
                 catch_driver(unit, driver_name, customer_name)
+
 
                 await message.answer("Order added to Database!")
 
@@ -246,7 +250,7 @@ async def admin_handler(message: types.Message):
 
         if manager_key == manager_exsist_key[0]:
             keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-            buttons_for_super_admin = ['Drivers', 'Works', 'Statistic', 'Managers', 'Add new manager', 'Remove manager']
+            buttons_for_super_admin = ['Drivers', 'Works', 'Managers', 'Add new manager', 'Remove manager', "Monthly Board"]
             buttons_for_manager = ["Drivers", 'Works']
             for manager_id in manager_idx:
 
@@ -276,27 +280,20 @@ async def admin_handler(message: types.Message):
             await message.answer("Mr/Mrs please send this command like that /manager: your_key")
 
 
-@dp.message_handler(lambda message: message.text == "Drivers")
-async def drivers(message: types.Message):
-    all_drivers, total_count = db.catch_all_drivers()
-    
-    # Create an inline keyboard with buttons for each driver
-    keyboard = types.InlineKeyboardMarkup()
-    for driver_name in all_drivers:
-        keyboard.add(types.InlineKeyboardButton(text=driver_name, callback_data=f"driver_{driver_name}"))
-    
-    # Send the message with all driver names and the total count along with the inline keyboard
-    await message.answer(f"Total number of drivers: {total_count}", reply_markup=keyboard)
+
 
 @dp.message_handler(lambda message: message.text == "Drivers")
 async def drivers(message: types.Message):
     all_drivers, total_count = db.catch_all_drivers()
     
     # Create an inline keyboard with buttons for each driver
-    keyboard = types.InlineKeyboardMarkup()
-    for driver_name, _ in all_drivers:
-        keyboard.add(types.InlineKeyboardButton(text=driver_name, callback_data=f"driver_{driver_name}"))
-    
+    keyboard = types.InlineKeyboardMarkup(row_width=3)  # Adjust the row_width value as needed
+    n = 0
+    for driver_name in all_drivers:
+        print(type(driver_name[0]))
+        keyboard.add(types.InlineKeyboardButton(text=str(n + 1), callback_data=f"driver_{driver_name[0]}"))
+        n += 1  # Increase n for the next iteration
+
     # Send the message with all driver names and the total count along with the inline keyboard
     await message.answer(f"Total number of drivers: {total_count}", reply_markup=keyboard)
 
@@ -318,8 +315,112 @@ async def detention(message: types.Message):
 
 #stopdan keyn qilinadigan ishla
 
+@dp.callback_query_handler(lambda query: query.data.startswith("driver_"))
+async def driver_info(callback: types.CallbackQuery):
+    print(callback.data)
+    global status
+    driver_name = callback.data.split("_")[1]
+
+    data = db.count_work_by_name(driver_name)
+    keybard = InlineKeyboardMarkup(row_width=5)
+
+    back = InlineKeyboardButton(text="Back", callback_data='back')
+    keybard.add(back)
+    info_driver_status = db.get_status_payment(driver_name)
+    print(info_driver_status)
+    status = info_driver_status[0][2]
+    if status == "PAID":
+        for info in data:
+            template = f"Driver name: {info[1]}\n\nThe total number of jobs done: {info[0]}\n\nCurrent order from: {info[2]}"
+                
+        await bot.edit_message_text(chat_id=callback.from_user.id, message_id=callback.message.message_id, text=template, reply_markup=keybard)
+        
+    elif status == "WAIT":
+        for info in data:
+            template = f"Driver name: {info[1]}\n\nThe total number of jobs done: {info[0]}\n\nCurrent order from: {info[2]}\n\nThere is unpaid work"
+        unpaid_keyboard = types.InlineKeyboardButton(text="PAID", callback_data=f"paid_{info_driver_status[0][0]}")
+        keybard.add(unpaid_keyboard)        
+        await bot.edit_message_text(chat_id=callback.from_user.id, message_id=callback.message.message_id, text=template, reply_markup=keybard)
+        
+                
+    else:
+        for info in data:
+            template = f"Driver name: {info[1]}\n\nThe total number of jobs done: {info[0]}\n\nCurrent order from: {info[2]}"
+            
+        await bot.edit_message_text(chat_id=callback.from_user.id, message_id=callback.message.message_id, text=template, reply_markup=keybard)
 
 
+@dp.callback_query_handler(lambda query: query.data.startswith("paid_"))
+async def paid(query: types.CallbackQuery):
+    id = query.data.split("_")[1]
+
+    db.update_status(id)
+
+    await query.message.answer("Ok Payment Status changed")
+
+
+import sqlite3
+import pandas as pd
+
+def export_table_to_excel(db_file, table_name, excel_file):
+    # Connect to the SQLite database
+    conn = sqlite3.connect(db_file)
+    
+    # Read data from the database table into a pandas DataFrame
+    query = f"SELECT * FROM {table_name};"
+    df = pd.read_sql_query(query, conn)
+    
+    # Remove the first column (assuming it's the primary key or an auto-increment ID)
+    df = df.iloc[:, 1:]
+    
+    # Export DataFrame to Excel
+    df.to_excel(excel_file, index=False)
+    
+    # Close the database connection
+    conn.close()
+    print(f"Data from table '{table_name}' exported to '{excel_file}' successfully.")
+
+# Example usage
+
+
+
+
+
+def monthly_board():
+    db_file = "database.db"  # Replace with your SQLite database file path
+    table_name = "mothly"  # Replace with the name of your table
+    excel_file = "Monthly_Board.xlsx"  # Replace with the desired Excel file name/path
+    export_table_to_excel(db_file, table_name, excel_file)
+
+
+
+
+# Assuming bot is your aiogram.Bot instance
+@dp.message_handler(lambda message: message.text == "Monthly Board")
+async def exel(message: types.Message):
+    # Call your function to export data to Excel
+    monthly_board()
+    # Send the Excel document to the user
+    await bot.send_document(chat_id=message.from_user.id, document=open("Monthly_Board.xlsx", "rb"))
+
+
+
+
+
+@dp.callback_query_handler(lambda query: query.data == "back")
+async def back_to(callback: types.CallbackQuery):
+    all_drivers, total_count = db.catch_all_drivers()
+    
+    # Create an iline keyboard with buttons fnor each driver
+    keyboard = types.InlineKeyboardMarkup(row_width=3)  # Adjust the row_width value as needed
+    n = 0
+    for driver_name in all_drivers:
+        print(type(driver_name[0]))
+        keyboard.add(types.InlineKeyboardButton(text=str(n + 1), callback_data=f"driver_{driver_name[0]}"))
+        n += 1  # Increase n for the next iteration
+    
+    # Send the message with all driver names and the total count along with the inline keyboard
+    await bot.edit_message_text(chat_id=callback.from_user.id,message_id=callback.message.message_id,text=f"Total number of drivers: {total_count}", reply_markup=keyboard)
 
 
 #Others
@@ -330,10 +431,25 @@ async def detention(message: types.Message):
 
 
 
+from aiogram import types
+
 @dp.message_handler(lambda message: message.text == "Works")
 async def works(message: types.Message):
-    all_rows, total_count, catch_finished, finished_count, catch_in_progress, in_progress_count = db.catch_works()
-    in_prog = len(catch_in_progress)
+    keyboard_markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    finished_button = types.KeyboardButton("Finished works")
+    in_progress_button = types.KeyboardButton("In progress works")
+    rejected_button = types.KeyboardButton("Rejected works")
+    canceled_button = types.KeyboardButton("Canceled works")
+    keyboard_markup.add(finished_button, in_progress_button, rejected_button, canceled_button)
+    await message.answer("Please select an option:", reply_markup=keyboard_markup)
+
+from aiogram import types
+
+@dp.message_handler(lambda message: message.text == "Finished works")
+async def finished_works(message: types.Message):
+    # Get data for finished works
+    all_rows, total_count, catch_finished, finished_count, catch_in_progress, in_progress_count, catch_rejected, rejected_count, catch_canceled, canceled_count = db.catch_works()
+
     # Limit the number of works to 10 for catch_finished
     catch_finished = catch_finished[:10]
 
@@ -357,6 +473,13 @@ async def works(message: types.Message):
 
         # Send the list of finished works with inline keyboard
         await message.answer("Finished Works:", reply_markup=finished_keyboard_markup)
+    else:
+        await message.answer("No finished works at the moment.")
+
+@dp.message_handler(lambda message: message.text == "In progress works")
+async def in_progress_works(message: types.Message):
+    # Get data for in-progress works
+    all_rows, total_count, catch_finished, finished_count, catch_in_progress, in_progress_count, catch_rejected, rejected_count, catch_canceled, canceled_count = db.catch_works()
 
     # Limit the number of works to 10 for catch_in_progress
     catch_in_progress = catch_in_progress[:10]
@@ -374,7 +497,7 @@ async def works(message: types.Message):
             button = types.InlineKeyboardButton(str(idx), callback_data=f"progress_{row[0]}")
             in_progress_keyboard_markup.add(button)
 
-        if in_prog > 10:
+        if in_progress_count > 10:
             next_page_button = types.InlineKeyboardButton("Next Page", callback_data="next_page_progress")
             in_progress_keyboard_markup.add(next_page_button)
 
@@ -386,10 +509,196 @@ async def works(message: types.Message):
     else:
         await message.answer("No works in progress at the moment.")
 
+@dp.message_handler(lambda message: message.text == "Rejected works")
+async def rejected_works(message: types.Message):
+    # Get data for rejected works
+    all_rows, total_count, catch_finished, finished_count, catch_in_progress, in_progress_count, catch_rejected, rejected_count, catch_canceled, canceled_count = db.catch_works()
+    works_title = "Rejected"
+    # Limit the number of works to 10 for catch_rejected
+    works = catch_rejected[:10]
+    count = rejected_count
+
+    # Create a list to store the rejected works
+    Works_List = []
+    if works:
+        # Add each work to the Works_List
+        for idx, row in enumerate(works, start=1):
+            Works_List.append(f"{idx}. Customer: {row[1]}\nDriver Name: {row[2]}\nLane: {row[4]}\nRate: {row[5]}")
+
+        # Create inline keyboard markup with buttons labeled 1 to 10 for works
+        keyboard_markup = types.InlineKeyboardMarkup(row_width=5)
+        for idx, row in enumerate(works, start=1):
+            button = types.InlineKeyboardButton(str(idx), callback_data=f"{works_title.lower()}_{row[0]}")
+            keyboard_markup.add(button)
+
+        # Add "Next Page" button if there are more than 10 works
+        if count > 10:
+            next_page_button = types.InlineKeyboardButton("Next Page", callback_data=f"next_page_{works_title.lower()}")
+            keyboard_markup.add(next_page_button)
+
+        # Send the list of works with inline keyboard
+        await message.answer(f"{works_title.capitalize()} Works:", reply_markup=keyboard_markup)
+    else:
+        await message.answer(f"No {works_title.lower()} works at the moment.")
+
+
+@dp.callback_query_handler(lambda query: query.data.startswith("rejected_"))
+async def rejected_callback(query: types.CallbackQuery):
+    # Extract the jobID from the callback data
+    job_id = query.data.split("_")[1]
+
+    # Fetch the details of the rejected work using the jobID
+    rejected_work_details = db.get_work_details_by_id(job_id)
+
+    if rejected_work_details is None:
+        await query.message.answer("Work details not found.")
+        return
+
+    # Prepare the message text
+    message_text = f"Details of Rejected Work (Job ID: {job_id}):\n\n"
+    for key, value in rejected_work_details.items():
+        message_text += f"{key.capitalize()}: {value}\n"
+
+    # Create inline keyboard markup with "Back" button
+    back_button = types.InlineKeyboardButton("Back", callback_data="back_to_rejected")
+    keyboard_markup = types.InlineKeyboardMarkup().add(back_button)
+
+    # Send the message with the details of the rejected work and the "Back" button
+    await bot.edit_message_text(chat_id=query.from_user.id, message_id=query.message.message_id, text=message_text, reply_markup=keyboard_markup)
+
+@dp.callback_query_handler(lambda query: query.data == "back_to_rejected")
+async def back_to_rejected_callback(query: types.CallbackQuery):
+    # Get data for rejected works
+    all_rows, total_count, catch_finished, finished_count, catch_in_progress, in_progress_count, catch_rejected, rejected_count, catch_canceled, canceled_count = db.catch_works()
+    works_title = "Rejected"
+
+    # Limit the number of works to 10 for catch_rejected
+    works = catch_rejected[:10]
+    count = rejected_count
+
+    # Create a list to store the rejected works
+    Works_List = []
+    if works:
+        # Add each work to the Works_List
+        for idx, row in enumerate(works, start=1):
+            Works_List.append(f"{idx}. Customer: {row[1]}\nDriver Name: {row[2]}\nLane: {row[4]}\nRate: {row[5]}")
+
+        # Create inline keyboard markup with buttons labeled 1 to 10 for works
+        keyboard_markup = types.InlineKeyboardMarkup(row_width=5)
+        for idx, row in enumerate(works, start=1):
+            button = types.InlineKeyboardButton(str(idx), callback_data=f"{works_title.lower()}_{row[0]}")
+            keyboard_markup.add(button)
+
+        # Add "Next Page" button if there are more than 10 works
+        if count > 10:
+            next_page_button = types.InlineKeyboardButton("Next Page", callback_data=f"next_page_{works_title.lower()}")
+            keyboard_markup.add(next_page_button)
+
+        # Send the list of works with inline keyboard
+        await bot.edit_message_text(
+            chat_id=query.from_user.id,
+            message_id=query.message.message_id,
+            text=f"{works_title.capitalize()} Works:",
+            reply_markup=keyboard_markup
+        )
+    else:
+        await query.message.answer(f"No {works_title.lower()} works at the moment.")
 
 
 
 
+@dp.message_handler(lambda message: message.text == "Canceled works")
+async def canceled_works(message: types.Message):
+    # Get data for canceled works
+    all_rows, total_count, catch_finished, finished_count, catch_in_progress, in_progress_count, catch_rejected, rejected_count, catch_canceled, canceled_count = db.catch_works()
+    works_title = "Canceled"
+    # Limit the number of works to 10 for catch_canceled
+    works = catch_canceled[:10]
+    count = canceled_count
+
+    # Create a list to store the canceled works
+    Works_List = []
+    if works:
+        # Add each work to the Works_List
+        for idx, row in enumerate(works, start=1):
+            Works_List.append(f"{idx}. Customer: {row[1]}\nDriver Name: {row[2]}\nLane: {row[4]}\nRate: {row[5]}")
+
+        # Create inline keyboard markup with buttons labeled 1 to 10 for works
+        keyboard_markup = types.InlineKeyboardMarkup(row_width=5)
+        for idx, row in enumerate(works, start=1):
+            button = types.InlineKeyboardButton(str(idx), callback_data=f"canceled_{row[0]}")
+            keyboard_markup.add(button)
+
+        # Add "Next Page" button if there are more than 10 works
+        if count > 10:
+            next_page_button = types.InlineKeyboardButton("Next Page", callback_data=f"next_page_{works_title.lower()}")
+            keyboard_markup.add(next_page_button)
+
+        # Send the list of works with inline keyboard
+        await message.answer(f"{works_title.capitalize()} Works:", reply_markup=keyboard_markup)
+    else:
+        await message.answer(f"No {works_title.lower()} works at the moment.")
+
+
+@dp.callback_query_handler(lambda query: query.data.startswith("canceled_"))
+async def canceled_callback(query: types.CallbackQuery):
+    # Extract the jobID from the callback data
+    job_id = query.data.split("_")[1]
+
+    # Fetch the details of the canceled work using the jobID
+    canceled_work_details = db.get_work_details_by_id(job_id)
+
+    print(canceled_work_details)
+    # Prepare the message text
+    message_text = f"Details of Canceled Work (Job ID: {job_id}):\n\n"
+    for key, value in canceled_work_details.items():
+        message_text += f"{key.capitalize()}: {value}\n"
+
+    # Create inline keyboard markup with "Back" button
+    back_button = types.InlineKeyboardButton("Back", callback_data="back_to_canceled")
+    keyboard_markup = types.InlineKeyboardMarkup().add(back_button)
+
+    # Send the message with the details of the canceled work and the "Back" button
+    await bot.edit_message_text(chat_id=query.from_user.id, message_id=query.message.message_id, text=message_text, reply_markup=keyboard_markup)
+
+
+@dp.callback_query_handler(lambda query: query.data == "back_to_canceled")
+async def back_to_canceled_callback(query: types.CallbackQuery):
+    # Get data for canceled works
+    all_rows, total_count, catch_finished, finished_count, catch_in_progress, in_progress_count, catch_rejected, rejected_count, catch_canceled, canceled_count = db.catch_works()
+    works_title = "Canceled"
+
+    # Limit the number of works to 10 for catch_canceled
+    works = catch_canceled[:10]
+    count = canceled_count
+
+    # Create a list to store the canceled works
+    Works_List = []
+    if works:
+        # Add each work to the Works_List
+        for idx, row in enumerate(works, start=1):
+            Works_List.append(f"{idx}. Customer: {row[1]}\nDriver Name: {row[2]}\nLane: {row[4]}\nRate: {row[5]}")
+
+        # Create inline keyboard markup with buttons labeled 1 to 10 for works
+        keyboard_markup = types.InlineKeyboardMarkup(row_width=5)
+        for idx, row in enumerate(works, start=1):
+            button = types.InlineKeyboardButton(str(idx), callback_data=f"{works_title.lower()}_{row[0]}")
+            keyboard_markup.add(button)
+
+        # Add "Next Page" button if there are more than 10 works
+        if count > 10:
+            next_page_button = types.InlineKeyboardButton("Next Page", callback_data=f"next_page_{works_title.lower()}")
+            keyboard_markup.add(next_page_button)
+
+        # Send the list of works with inline keyboard
+        await bot.edit_message_text(
+            chat_id=query.from_user.id,
+            message_id=query.message.message_id,
+            text=f"{works_title.capitalize()} Works:",
+            reply_markup=keyboard_markup
+        )
+    else:
+        await query.message.answer(f"No {works_title.lower()} works at the moment.")
 
 
 
@@ -483,32 +792,43 @@ async def progress_id(query: types.CallbackQuery):
 
         await bot.edit_message_text(chat_id=query.from_user.id, message_id=query.message.message_id, text=template, reply_markup=keyboard)
 
-
+info = {}
 
 @dp.callback_query_handler(lambda query: query.data.startswith("progress_"))
 async def progress_id(query: types.CallbackQuery):
     id = query.data.split("_")[1]
- 
+    info.clear()
+    info["ID"] = id
     job_data = db.catch_job_by_id(id)
-    keyboard = InlineKeyboardMarkup(row_width=5)
+    keyboard = InlineKeyboardMarkup(row_width=3)
     back = InlineKeyboardButton("Back", callback_data="Back_progress")
-    keyboard.add(back)
+    finish = InlineKeyboardButton(text="Finished", callback_data="Finish")
+    reject = InlineKeyboardButton(text="Reject", callback_data=f"reject_{id}")
+    cancle = InlineKeyboardButton(text="Cancelled", callback_data=f"cancelled_{id}")
+    keyboard.add(finish, reject, cancle, back)
     for data in job_data:
         template = f"Customer: {data[0]}\n\n{'-' * 50}\n\nDriver Name: {data[1]}\n\n{'-' * 50}\n\nLane: {data[3]}\n\n{'-' * 50}\n\nRate: {data[4]}"
 
         await bot.edit_message_text(chat_id=query.from_user.id, message_id=query.message.message_id, text=template, reply_markup=keyboard)
 
 
+@dp.callback_query_handler(lambda query: query.data.startswith("reject"))
+async def reject(query: types.CallbackQuery):
+    job_id = query.data.split("_")[1]
+ 
+ 
+    await query.message.answer("The work is rejected")
 
+    db.reject(job_id)
 
 
 @dp.callback_query_handler(lambda query: query.data.startswith("Back_"))
 async def back(query: types.CallbackQuery):
     # Extract the action from the callback data
     action = query.data.split("_")[1]
-
+    print(action)
     # Retrieve the necessary data
-    all_rows, total_count, catch_finished, finished_count, catch_in_progress, in_progress_count = db.catch_works()
+    all_rows, total_count, catch_finished, finished_count, catch_in_progress, in_progress_count, catch_rejected, rejected_count, catch_canceled, canceled_count = db.catch_works()
 
     # Check the action
     if action == "progress":
@@ -535,9 +855,10 @@ async def back(query: types.CallbackQuery):
             # Send the list of in-progress works with inline keyboard
             await bot.edit_message_text(chat_id=query.from_user.id, message_id=query.message.message_id, text=f"Page 1\n\nWorks In Progress:\n\n{''.join(In_Progress_Works)}\n", reply_markup=in_progress_keyboard_markup)
 
-    elif action == "finished":
+    elif action == "finshed":
+        print("Finihs")
         catch_finished = catch_finished[:10]
-
+    
         # Create a list to store the finished works
         Finished_Works = []
         if catch_finished:
@@ -556,9 +877,111 @@ async def back(query: types.CallbackQuery):
             # Send the list of finished works with inline keyboard
             await bot.edit_message_text(chat_id=query.from_user.id, message_id=query.message.message_id, text=f"Page 1\n\nFinished Works:\n\n{row[1]}", reply_markup=finished_keyboard_markup)
 
+    elif action == "rejected":
+        catch_rejected = catch_rejected[:10]
+    
+        # Create a list to store the rejected works
+        Rejected_Works = []
+        if catch_rejected:
+            # Create inline keyboard markup with buttons labeled 1 to 10 for rejected works
+            rejected_keyboard_markup = types.InlineKeyboardMarkup(row_width=5)
+
+            for idx, row in enumerate(catch_rejected[:10], start=1):
+                button = types.InlineKeyboardButton(str(idx), callback_data=f"rejected_{row[0]}")
+                rejected_keyboard_markup.add(button)
+
+            # Add "Next Page" button if there are more than 10 rejected works
+            if rejected_count > 10:
+                next_page_button = types.InlineKeyboardButton("Next Page", callback_data="next_page_rejected")
+                rejected_keyboard_markup.add(next_page_button)
+
+            # Send the list of rejected works with inline keyboard
+            await bot.edit_message_text(chat_id=query.from_user.id, message_id=query.message.message_id, text=f"Page 1\n\nRejected Works:\n\n{row[1]}", reply_markup=rejected_keyboard_markup)
+
+    elif action == "canceled":
+        catch_canceled = catch_canceled[:10]
+    
+        # Create a list to store the canceled works
+        Canceled_Works = []
+        if catch_canceled:
+            # Create inline keyboard markup with buttons labeled 1 to 10 for canceled works
+            canceled_keyboard_markup = types.InlineKeyboardMarkup(row_width=5)
+
+            for idx, row in enumerate(catch_canceled[:10], start=1):
+                button = types.InlineKeyboardButton(str(idx), callback_data=f"canceled_{row[0]}")
+                canceled_keyboard_markup.add(button)
+
+            # Add "Next Page" button if there are more than 10 canceled works
+            if canceled_count > 10:
+                next_page_button = types.InlineKeyboardButton("Next Page", callback_data="next_page_canceled")
+                canceled_keyboard_markup.add(next_page_button)
+
+            # Send the list of canceled works with inline keyboard
+            await bot.edit_message_text(chat_id=query.from_user.id, message_id=query.message.message_id, text=f"Page 1\n\nCanceled Works:\n\n{row[1]}", reply_markup=canceled_keyboard_markup)
+
+    
+
+@dp.callback_query_handler(lambda query: query.data == "Finish")
+async def finish_work(callback: types.CallbackQuery, state: FSMContext):
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    buttons = ["Yes", "No Wait"]
+    keyboard.add(*buttons)
+    await callback.message.answer("Has the driver been paid?", reply_markup=keyboard)
+
+    await state.set_state(States.paid_status)
+
+@dp.message_handler(state=States.paid_status)
+async def paid_status(message: types.Message, state: FSMContext):
+    if message.text == "Yes":
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        buttons = ["Yes", "No Wait"]
+        info['paid'] = "PAID"
+        keyboard.add(*buttons)
+        await message.answer("Has the AMZ payment been paid?", reply_markup=keyboard)
+        await state.set_state(States.note)
+
+    if message.text == "No Wait":
+        id = info["ID"]
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        buttons_for_super_admin = ['Drivers', 'Works', 'Statistic', 'Managers', 'Add new manager', 'Remove manager']
+        keyboard.add(*buttons_for_super_admin)
+        db.update_payment_status_to_wait(id)
+        await message.answer("After payment, you can change the information from within Drivers", reply_markup=keyboard)
+        await state.finish()
 
 
 
+
+
+
+@dp.message_handler(state=States.note)
+async def note(message: types.Message, state: FSMContext):
+    if message.text == "Yes":
+        keyboard = types.ReplyKeyboardRemove()
+        await message.answer("Please enter Note", reply_markup=keyboard)
+        await state.set_state(States.no_note)
+    if message.text == "No":
+        job_id = info["ID"]
+        payment_status = info["paid"]
+        amz_status = info["amz"]
+        await message.answer("The work is completed")
+        db.update_monthly_without_note(payment_status, amz_status, job_id)
+        await message.answer("Job is finished")
+
+        await state.finish()
+
+
+@dp.message_handler(state=States.no_note)
+async def update_data(message: types.Message):
+    job_id = info["ID"]
+    payment_status = info["paid"]
+    amz_status = info["amz"]
+    note = message.text
+
+    if note:
+        db.update_monthly(payment_status, amz_status, note, job_id)
+
+        await message.answer("Job is finished")
 
 
 @dp.message_handler(lambda message: message.text == "Managers")
