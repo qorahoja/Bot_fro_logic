@@ -181,3 +181,8 @@
 # fuel_data('Invoice_RAJ_CARRIER_LLC_com,_Cube_Systems_LLC_org,_Cube_Systems.xlsx')
 
 
+# while True:
+#     a = int(input("Birinchi son: "))
+#     b = int(input("Ikkinchi son: "))
+
+#     print(a - b)

@@ -79,17 +79,12 @@ def fuel_data(file_name):
         
         # Group by 'Unnamed: 1' (Driver Name) and calculate the total fuel consumed and number of days worked
         grouped_df = filtered_df.groupby('Unnamed: 1').agg({'Unnamed: 15': 'sum', 'Unnamed: 4': 'nunique'}).reset_index()
-        grouped_df.columns = ['Driver Name', 'Total Fuel', 'Days Worked']
+        grouped_df.columns = ['Driver Name', 'Total Fuel', 'Total Days Worked']
         
-        # Calculate remaining fuel for drivers who worked more than 7 days
-        grouped_df['Remaining Fuel'] = grouped_df.apply(lambda row: row['Total Fuel'] - 7 * row['Days Worked'] if row['Days Worked'] > 7 else 0, axis=1)
+        # Convert dataframe to a list of tuples
+        fuel_data_list = list(grouped_df.itertuples(index=False, name=None))
         
-        # Create lists to store the results
-        driver_names = grouped_df['Driver Name'].tolist()
-        total_fuels = grouped_df['Total Fuel'].tolist()
-        days_worked_list = grouped_df['Days Worked'].tolist()
-        
-        return driver_names, total_fuels, days_worked_list
+        return fuel_data_list
         
     except FileNotFoundError:
         print(f"File '{file_name}' not found.")
@@ -145,6 +140,37 @@ def generate_job_id():
     return job_id
 
 
+import fitz
+
+def extract_text_from_pdf(pdf_path):
+    # Open the PDF file
+    with fitz.open(pdf_path) as pdf:
+        # Get the second page
+        page = pdf[1]  # Index starts from 0, so 1 represents the second page
+        
+        # Extract text from the page
+        text = page.get_text()
+        # print(text.split("\n"))
+        
+        return text
+
+
+
+def find_next_line_after_week(text_content):
+    # Split the text by lines
+    lines = text_content.split('\n')
+    
+    # Search for the line containing "Week"
+    for i, line in enumerate(lines):
+        if line == "Week":
+            # Check if the next line exists
+            if i + 1 < len(lines):
+                return lines[i + 1]
+            else:
+                return "Next line after 'Week' not found"
+    
+    return "'Week' not found"
+
 @dp.message_handler(commands=['new_order'])
 async def mute_user_command(message: types.Message):
     print("NewOreder")
@@ -180,8 +206,15 @@ async def mute_user_command(message: types.Message):
 
                 gross = message_text.split("Gross: ")[1].split("\n")[0]
                 
+                p_m = int(miles) / int(gross.split("$")[0]) 
+
+                factoring = 0.01 * int(gross.split("$")[0])
+
+                dispach = 0.03 * int(gross.split("$")[0])
                 
-            
+
+
+                all_miles = int(dh)+ int(miles)
 
                 # Generate or retrieve the unique jobID
                 jobID = generate_job_id()  # Assuming you have a function to generate a unique job ID
@@ -193,8 +226,10 @@ async def mute_user_command(message: types.Message):
                 # Call the catch_driver function with the appropriate parameters
                 catch_driver(unit, driver_name, customer_name)
 
+                db.insert_driver_name(jobID, unit, driver_name, gross, p_m, all_miles, all_miles, factoring, dispach)
 
-                await message.answer("Order added to Database!")
+
+                await message.answer("Order added to Database!")    
 
 
 
@@ -222,14 +257,21 @@ async def handle_document(message: types.Message):
 
         # Format and print the data
         if data:
-            print("Total fuel values per driver:")
-            print("{:<20} {:<10}".format("Driver Name", "Total Fuel"))
-            print("-" * 30)
-            for driver, fuel in data:
-                print("{:<20} {:<10}".format(driver, fuel))
+            fuel_text = "Total fuel values per driver:\n"
+            fuel_text += "{:<20} {:<10} {:<15}\n".format("Driver Name", "Total Fuel", "Total Days Worked")
+            fuel_text += "-" * 50 + "\n"
+            for driver, fuel, days_worked in data:
+                db.update_fuel(driver, fuel, days_worked)
+                fuel_text += "{:<20} {:<10} {:<15}\n".format(driver, fuel, days_worked)
+            
+            # Print the fuel data
+            print(fuel_text)
 
         await message.delete()
 
+
+    elif message.document.mime_type == 'application/pdf':
+        print("PDF")
 
 
 
@@ -297,23 +339,57 @@ async def drivers(message: types.Message):
     # Send the message with all driver names and the total count along with the inline keyboard
     await message.answer(f"Total number of drivers: {total_count}", reply_markup=keyboard)
 
-
+data_l_d = {}
 
 @dp.message_handler(commands=['layover'])
 async def layover(message: types.Message):
     await message.delete()
-    await message.answer("Layover added to Database!!!")
-    money = message.text.split(" ")[1]
+    driver_names = db.catch_a_drivers()
+    keyboard = types.InlineKeyboardMarkup(row_width=5)
+    for driver in driver_names:
+   
+        button = types.InlineKeyboardButton(text=driver[0], callback_data=f"driver-name_{driver[0]}")
+        keyboard.add(button)
+    await message.answer("Please select driver", reply_markup=keyboard)
+    data_l_d['money'] = message.text.split(" ")[1]
 
+
+
+
+
+@dp.callback_query_handler(lambda query: query.data.startswith("driver-name"))
+async def lay(query: types.CallbackQuery):
+    driver_name = query.data.split("_")[1]
+
+    await query.message.answer("Ok layover added")
+
+    layover = str(data_l_d["money"])
+ 
+    db.insert_layover(driver_name, layover)
 
 @dp.message_handler(commands=['detention'])
-async def detention(message: types.Message):
+async def layover(message: types.Message):
     await message.delete()
-    await message.answer("Detention added to Database!!!")
-    money = message.text.split(" ")[1]
+    driver_names = db.catch_all_drivers()
+    keyboard = types.InlineKeyboardMarkup(row_width=5)
+    for driver in driver_names:
+        button = types.InlineKeyboardButton(text=driver[0], callback_data=f"driver-detention_{driver[0]}")
+        keyboard.add(button)
+        await message.answer("Please select driver", reply_markup=keyboard)
+    data_l_d['detention'] = message.text.split(" ")[1]
 
 
-#stopdan keyn qilinadigan ishla
+@dp.callback_query_handler(lambda query: query.data.startswith("driver-detention"))
+async def lay(query: types.CallbackQuery):
+    driver_name = query.data.split("_")[0]
+
+    await query.message.answer("Ok detention added")
+
+    detention = data_l_d["detention"]
+
+    db.insert_detention(driver_name, detention)
+
+
 
 @dp.callback_query_handler(lambda query: query.data.startswith("driver_"))
 async def driver_info(callback: types.CallbackQuery):
@@ -423,11 +499,6 @@ async def back_to(callback: types.CallbackQuery):
     await bot.edit_message_text(chat_id=callback.from_user.id,message_id=callback.message.message_id,text=f"Total number of drivers: {total_count}", reply_markup=keyboard)
 
 
-#Others
-
-
-
-#Rate
 
 
 
@@ -930,6 +1001,8 @@ async def finish_work(callback: types.CallbackQuery, state: FSMContext):
 
     await state.set_state(States.paid_status)
 
+
+
 @dp.message_handler(state=States.paid_status)
 async def paid_status(message: types.Message, state: FSMContext):
     if message.text == "Yes":
@@ -998,6 +1071,12 @@ async def managers(message: types.Message):
         await message.answer(template)
 
 
+
+@dp.message_handler(lambda message: message.text == "All Data")
+async def exel_all(message: types.Message):
+    await message.answer("Wait a minute data's are collecting....")
+
+    
 
 @dp.message_handler(lambda message: message.text == "Add new manager")
 async def new_manager(message: types.Message):
