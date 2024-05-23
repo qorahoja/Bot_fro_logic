@@ -14,13 +14,13 @@
 
 
 
-# def find_next_line_after_week(text_content):
+# def find_next_line_after_week(text_content, line_):
 #     # Split the text by lines
 #     lines = text_content.split('\n')
     
 #     # Search for the line containing "Week"
 #     for i, line in enumerate(lines):
-#         if line == "Week":
+#         if line == line_:
 #             # Check if the next line exists
 #             if i + 1 < len(lines):
 #                 return lines[i + 1]
@@ -29,6 +29,14 @@
     
 #     return "'Week' not found"
 
+
+# result = extract_text_from_pdf("downloaded_BQACAgIAAxkBAAIri2Y_bBxvHCyrMtaGXzCDx4jXTM_hAAKdSgACLML4SWDzJ_DyymVMNQQ.pdf")
+
+# print(result)
+
+# find = find_next_line_after_week(result, "Charge")
+
+# print(find)
 
 
 
@@ -186,3 +194,42 @@
 #     b = int(input("Ikkinchi son: "))
 
 #     print(a - b)
+
+
+
+
+import pandas as pd
+import numpy as np
+import sqlite3
+# # Assuming the CSV file is named "data.csv" and is in the current directory
+# file_path = "Toll Details.csv"
+
+# df = pd.read_csv(file_path)
+
+# # Replace non-finite values with NaN
+# df['EquipID'] = df['EquipID'].replace([np.inf, -np.inf], np.nan)
+
+# # Convert EquipID to integers, ignoring NaN values
+# df['EquipID'] = df['EquipID'].astype('Int64')
+
+# # Drop rows where EquipID is NaN
+# df = df.dropna(subset=['EquipID'])
+
+# # Create a dictionary to store EquipID and corresponding InvoiceDate and Toll_Amount
+# equipid_invoice_toll = dict(zip(zip(df['EquipID'], df['InvoiceDate']), df['Toll_Amount']))
+
+# # Print EquipID, InvoiceDate, and corresponding Toll_Amount
+# for (equip_id, invoice_date), toll_amount in equipid_invoice_toll.items():
+#     print(f"EquipID: {equip_id}, InvoiceDate: {invoice_date}, Toll_Amount: {toll_amount}")
+
+
+import sqlite3
+import pandas as pd
+
+
+
+# Example usage:
+# export_table_to_excel('your_database.db', 'your_table', 'output.xlsx')
+
+
+export_table_to_excel('database.db', 'jobs', 'output.xlsx')
